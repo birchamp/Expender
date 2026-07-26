@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Expender",
+    "slug": "expender",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "expender",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1220"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.expender.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Expender uses the camera to scan receipts into your trip.",
+        "NSPhotoLibraryUsageDescription": "Expender can attach receipt photos from your library.",
+        "NSPhotoLibraryAddUsageDescription": "Expender can save receipt images and reports."
+      }
+    },
+    "android": {
+      "package": "com.expender.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B1220"
+      },
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Expender uses the camera to scan receipts into your trip.",
+          "photosPermission": "Expender can attach receipt photos from your library."
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
