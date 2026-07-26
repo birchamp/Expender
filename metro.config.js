@@ -13,6 +13,9 @@ const config = getDefaultConfig(__dirname);
  * specifiers like `crypto` or `stream` are left alone so that packages
  * relying on a real shim keep working.
  */
+// expo-sqlite's web build imports the wa-sqlite WASM binary as a module.
+config.resolver.assetExts.push('wasm');
+
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName.startsWith('node:')) {
     return { type: 'empty' };

@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "tsx scripts/check-logic.ts",
+    "verify": "tsc --noEmit && tsx scripts/check-logic.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.0.10",
+    "tsx": "^4.20.0",
     "typescript": "~5.8.3"
   }
 }

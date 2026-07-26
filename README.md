@@ -72,7 +72,15 @@ npm install
 npx expo start
 ```
 
-Open in Expo Go, or `npx expo run:ios` / `npx expo run:android` for a dev build.
+Scan the QR code with **Expo Go** on your phone, or press `i` / `a` for a
+simulator. Every native module the app uses is bundled in Expo Go, so no custom
+dev build is required — `npx expo run:ios` / `npx expo run:android` also work if
+you prefer one.
+
+`npx expo start --web` runs it in a browser. Useful for exercising the trip,
+review, report and PDF screens quickly; the camera and keychain fall back to a
+file picker and `localStorage` there, so treat web as a convenience, not the
+real target.
 
 Then in **Settings**, paste an Anthropic API key
 ([console.anthropic.com](https://console.anthropic.com/settings/keys)). It is
@@ -87,6 +95,21 @@ faint, crumpled and handwritten receipts. `claude-sonnet-5` and
 cost. Extraction uses vision plus structured outputs
 (`output_config.format` with a JSON Schema), so the response shape is guaranteed
 by the API rather than parsed hopefully.
+
+### Testing without a device
+
+```bash
+npm run verify    # typecheck + the checks below
+npm run check     # deterministic validation + input parsing
+```
+
+`scripts/check-logic.ts` exercises the parts that don't need a phone: the
+validation gate (arithmetic reconciliation, currency, date window, confidence
+thresholds, auto-confirm behaviour) and the money/date parsers. It needs no API
+key and no network.
+
+The camera, crop gestures and a live extraction round-trip can only be tested on
+a device.
 
 ---
 
@@ -109,6 +132,8 @@ src/
   lib/       image pipeline, capture, formatting, ids
   pdf/       HTML report builder, PDF and CSV export
   components/  shared UI, expense card, crop editor
+
+scripts/check-logic.ts    device-free checks for validation + parsing
 ```
 
 ### Notes
