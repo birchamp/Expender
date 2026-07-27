@@ -3,7 +3,7 @@
  * the deterministic validation gate and the input parsers.
  */
 import { validateExtraction } from '@/ai/validate';
-import { normaliseDateInput, parseAmountInput, roundMoney } from '@/lib/format';
+import { parseAmountInput, roundMoney } from '@/lib/format';
 import type { ReceiptExtraction } from '@/ai/schema';
 import type { Trip } from '@/types';
 import type { AppPreferences } from '@/db/settings';
@@ -100,17 +100,66 @@ check('currency differing from the trip is flagged', r5.issues.some((i) => i.inc
 const r6 = validateExtraction({ ...clean, currency: 'EU' }, trip, prefs);
 check('invalid ISO 4217 code is rejected', r6.issues.some((i) => i.includes('ISO 4217')), r6.issues.join(' | '));
 
-// 7. Date outside the trip window (beyond the 3-day slack).
+// 7. A meal well before the trip is genuinely suspicious.
 const r7 = validateExtraction({ ...clean, date: '2026-02-01' }, trip, prefs);
-check('date before the trip is flagged', r7.issues.some((i) => i.includes('before the trip')), r7.issues.join(' | '));
+check('meal six weeks early is flagged', r7.issues.some((i) => i.includes('before the trip starts')), r7.issues.join(' | '));
 
 // 8. Future-dated receipt.
 const r8 = validateExtraction({ ...clean, date: '2099-01-01' }, trip, prefs);
 check('future date is flagged', r8.issues.some((i) => i.includes('future')), r8.issues.join(' | '));
 
-// 9. A date just inside the slack window must NOT be flagged.
+// 9. A meal the night before departure is normal.
 const r9 = validateExtraction({ ...clean, date: '2026-03-13' }, trip, prefs);
-check('date one day early is tolerated', !r9.issues.some((i) => i.includes('before the trip')), r9.issues.join(' | '));
+check('meal one day early is tolerated', !r9.issues.some((i) => i.includes('before the trip')), r9.issues.join(' | '));
+
+/* --- receipts that legitimately fall outside the travel dates ------------- */
+
+const beforeTrip = (category: ReceiptExtraction['category'], date: string) =>
+  validateExtraction(
+    { ...clean, category, date, subtotal: null, tax: null, tip: null, line_items: [] },
+    trip,
+    prefs,
+  );
+
+// A flight booked three months ahead is routine, not an anomaly.
+const flight = beforeTrip('airfare', '2025-12-14');
+check('flight booked 3 months early is NOT flagged', !flight.issues.some((i) => i.includes('before the trip')), flight.issues.join(' | '));
+
+// Same for the hotel and the conference ticket.
+const hotel = beforeTrip('lodging', '2026-01-20');
+check('hotel booked 2 months early is NOT flagged', !hotel.issues.some((i) => i.includes('before the trip')), hotel.issues.join(' | '));
+const conf = beforeTrip('conference_fees', '2025-11-01');
+check('conference fee paid 4 months early is NOT flagged', !conf.issues.some((i) => i.includes('before the trip')), conf.issues.join(' | '));
+
+// The ride to the airport the day before departure.
+const rideOut = beforeTrip('ground_transport', '2026-03-13');
+check('taxi the day before departure is NOT flagged', !rideOut.issues.some((i) => i.includes('before the trip')), rideOut.issues.join(' | '));
+
+const afterTrip = (category: ReceiptExtraction['category'], date: string) =>
+  validateExtraction(
+    { ...clean, category, date, subtotal: null, tax: null, tip: null, line_items: [] },
+    trip,
+    prefs,
+  );
+
+// Long-stay airport parking is paid on the way out, after the trip ends.
+const parking = afterTrip('parking_tolls', '2026-03-24');
+check('airport parking paid 6 days after is NOT flagged', !parking.issues.some((i) => i.includes('after the trip')), parking.issues.join(' | '));
+
+// Roaming charges land on next month's bill.
+const roaming = afterTrip('communications', '2026-04-10');
+check('roaming billed 3 weeks later is NOT flagged', !roaming.issues.some((i) => i.includes('after the trip')), roaming.issues.join(' | '));
+
+// But a restaurant meal a month after the trip still gets a look.
+const lateMeal = afterTrip('meals', '2026-04-18');
+check('meal a month after the trip IS flagged', lateMeal.issues.some((i) => i.includes('after the trip ends')), lateMeal.issues.join(' | '));
+
+// A flight dated a year and a half before the trip is beyond even airfare's window.
+const ancientFlight = beforeTrip('airfare', '2024-06-01');
+check('flight 21 months early IS flagged', ancientFlight.issues.some((i) => i.includes('before the trip starts')), ancientFlight.issues.join(' | '));
+
+// The message should name the category so the reason is obvious.
+check('out-of-window message names the category', ancientFlight.issues.some((i) => i.includes('a flight')), ancientFlight.issues.join(' | '));
 
 // 10. Missing total.
 const r10 = validateExtraction({ ...clean, total: null, subtotal: null, tax: null, tip: null }, trip, prefs);
@@ -136,11 +185,6 @@ check('parses accounting negative "(12.00)"', parseAmountInput('(12.00)') === -1
 check('rejects empty input', parseAmountInput('   ') === null);
 check('parses "€ 42"', parseAmountInput('€ 42') === 42);
 
-check('normalises 3/14/2026', normaliseDateInput('3/14/2026') === '2026-03-14');
-check('normalises 14/3/2026 (day-first, unambiguous)', normaliseDateInput('14/3/2026') === '2026-03-14');
-check('passes through ISO', normaliseDateInput('2026-03-14') === '2026-03-14');
-check('rejects impossible date 2026-02-30', normaliseDateInput('2026-02-30') === null);
-check('rejects free text', normaliseDateInput('last tuesday') === null);
 
 check('roundMoney fixes float drift', roundMoney(0.1 + 0.2) === 0.3);
 

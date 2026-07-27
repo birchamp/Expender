@@ -1,22 +1,13 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ActionSheetIOS,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActionSheetIOS, Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Badge, Button, Card, Divider, Field, Input, Loading, Screen } from '@/components/ui';
+import { FormScreen } from '@/components/FormScreen';
+import { DateField } from '@/components/DateField';
 import { colors, radius, spacing, statusColor, statusLabel } from '@/theme';
 import { CATEGORIES, CATEGORY_LABELS, type Category, type ExpenseWithReceipts, type Trip } from '@/types';
-import { formatMoney, normaliseDateInput, parseAmountInput, roundMoney } from '@/lib/format';
+import { formatMoney, parseAmountInput, roundMoney } from '@/lib/format';
 import {
   addReceipt,
   deleteExpense,
@@ -32,7 +23,7 @@ import { isExtracting, retryExtraction, subscribeToExtractions } from '@/ai/queu
 
 interface FormState {
   merchant: string;
-  date: string;
+  date: string | null;
   amount: string;
   currency: string;
   subtotal: string;
@@ -50,7 +41,7 @@ function toForm(expense: ExpenseWithReceipts): FormState {
   const money = (n: number | null) => (n === null ? '' : String(n));
   return {
     merchant: expense.merchant,
-    date: expense.date ?? '',
+    date: expense.date,
     amount: money(expense.amount),
     currency: expense.currency,
     subtotal: money(expense.subtotal),
@@ -126,11 +117,7 @@ export default function ExpenseScreen() {
   const save = useCallback(
     async (nextStatus?: 'confirmed') => {
       if (!expense || !form) return;
-      const date = form.date.trim() ? normaliseDateInput(form.date) : null;
-      if (form.date.trim() && !date) {
-        Alert.alert('Check the date', 'Use YYYY-MM-DD, e.g. 2026-03-14.');
-        return;
-      }
+      const date = form.date;
       const amount = parseAmountInput(form.amount);
       const code = form.currency.trim().toUpperCase();
       if (!/^[A-Z]{3}$/.test(code)) {
@@ -287,12 +274,7 @@ export default function ExpenseScreen() {
           ),
         }}
       />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <FormScreen>
           {/* ---------------------------- receipts ---------------------------- */}
           <View style={styles.receiptStrip}>
             {expense.receipts.map((receipt, index) => (
@@ -373,14 +355,12 @@ export default function ExpenseScreen() {
 
           <View style={styles.pairRow}>
             <View style={{ flex: 1.4 }}>
-              <Field label="Date">
-                <Input
-                  value={form.date}
-                  onChangeText={(t) => update('date', t)}
-                  placeholder="2026-03-14"
-                  autoCapitalize="none"
-                />
-              </Field>
+              <DateField
+                label="Date"
+                value={form.date}
+                placeholder="Not read"
+                onChange={(next) => update('date', next)}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Field label="Currency">
@@ -523,8 +503,7 @@ export default function ExpenseScreen() {
             onPress={() => void save('confirmed')}
             loading={busy}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </FormScreen>
     </Screen>
   );
 }
@@ -535,7 +514,6 @@ function numOrNull(value: string): number | null {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
   receiptStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   receiptTile: {
     width: 96,
@@ -566,7 +544,7 @@ const styles = StyleSheet.create({
   issues: { marginTop: spacing.md, gap: 6 },
   issueRow: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
   issueText: { color: colors.textDim, fontSize: 13, flex: 1, lineHeight: 18 },
-  pairRow: { flexDirection: 'row', gap: spacing.md },
+  pairRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg, alignItems: 'flex-start' },
   tripleRow: { flexDirection: 'row', gap: spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {

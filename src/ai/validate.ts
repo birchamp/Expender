@@ -1,7 +1,7 @@
 import { parseISODate, roundMoney } from '@/lib/format';
 import type { ReceiptExtraction } from './schema';
 import type { AppPreferences } from '@/db/settings';
-import type { ExpenseStatus, Trip } from '@/types';
+import type { Category, ExpenseStatus, Trip } from '@/types';
 
 export interface ValidationOutcome {
   status: Extract<ExpenseStatus, 'needs_review' | 'confirmed'>;
@@ -10,10 +10,70 @@ export interface ValidationOutcome {
 
 /** Amounts within a cent of each other are equal for our purposes. */
 const MONEY_TOLERANCE = 0.011;
-/** How far outside the trip window a date can fall before we flag it. */
-const DATE_SLACK_DAYS = 3;
 
 const ISO_4217 = /^[A-Z]{3}$/;
+
+/**
+ * How far outside the trip window a receipt of each category can legitimately
+ * fall, in days.
+ *
+ * A flat window was wrong: real trips generate spend long before the first
+ * travel day and a little after the last one. Flights and hotels get booked
+ * months ahead, conference registration earlier still, airport parking is paid
+ * on the way out, and roaming charges land on a bill weeks later. Flagging all
+ * of those trains the user to ignore the review queue, which defeats it.
+ *
+ * The windows are per-category because that is where the real signal is: a
+ * flight 90 days early is routine, a restaurant meal 90 days early is not.
+ */
+const DATE_WINDOW: Record<Category, { before: number; after: number }> = {
+  // Booked far in advance, sometimes a full budget cycle ahead.
+  airfare: { before: 365, after: 30 },
+  lodging: { before: 365, after: 14 },
+  car_rental: { before: 365, after: 14 },
+  conference_fees: { before: 365, after: 30 },
+  // Travel-day spend: the ride to the airport, long-stay parking paid on
+  // return, fuel in the rental on the way back.
+  ground_transport: { before: 7, after: 7 },
+  parking_tolls: { before: 7, after: 10 },
+  fuel: { before: 3, after: 5 },
+  // Billed in arrears by the provider.
+  communications: { before: 30, after: 45 },
+  shipping: { before: 30, after: 30 },
+  // Bought in preparation, occasionally on the way.
+  supplies: { before: 21, after: 7 },
+  // Should happen while you are actually there. A dinner three weeks before
+  // the trip is worth a human glance.
+  meals: { before: 2, after: 2 },
+  entertainment: { before: 2, after: 2 },
+  other: { before: 7, after: 7 },
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Reads naturally inside "…than usual for {noun}". */
+const CATEGORY_NOUN: Record<Category, string> = {
+  airfare: 'a flight',
+  lodging: 'a hotel booking',
+  car_rental: 'a car rental',
+  conference_fees: 'a registration fee',
+  ground_transport: 'ground transport',
+  parking_tolls: 'parking',
+  fuel: 'fuel',
+  communications: 'a phone or data charge',
+  shipping: 'shipping',
+  supplies: 'supplies',
+  meals: 'a meal',
+  entertainment: 'entertainment',
+  other: 'this category',
+};
+
+function describeGap(days: number): string {
+  if (days === 1) return '1 day';
+  if (days < 45) return `${days} days`;
+  const months = Math.round(days / 30);
+  return `about ${months} month${months === 1 ? '' : 's'}`;
+}
 
 /**
  * Deterministic checks that run on every extraction. This is the second half
@@ -82,12 +142,27 @@ export function validateExtraction(
       }
       const start = trip.startDate ? parseISODate(trip.startDate) : null;
       const end = trip.endDate ? parseISODate(trip.endDate) : null;
-      const slack = DATE_SLACK_DAYS * 24 * 60 * 60 * 1000;
-      if (start && parsed.getTime() < start.getTime() - slack) {
-        issues.push('The receipt date falls before the trip starts.');
+      const window = DATE_WINDOW[data.category] ?? DATE_WINDOW.other;
+
+      if (start && parsed.getTime() < start.getTime()) {
+        const daysEarly = Math.round((start.getTime() - parsed.getTime()) / DAY_MS);
+        if (daysEarly > window.before) {
+          issues.push(
+            `Dated ${describeGap(daysEarly)} before the trip starts — further ahead than usual for ${
+              CATEGORY_NOUN[data.category]
+            }. Check it belongs to this trip.`,
+          );
+        }
       }
-      if (end && parsed.getTime() > end.getTime() + slack) {
-        issues.push('The receipt date falls after the trip ends.');
+      if (end && parsed.getTime() > end.getTime()) {
+        const daysLate = Math.round((parsed.getTime() - end.getTime()) / DAY_MS);
+        if (daysLate > window.after) {
+          issues.push(
+            `Dated ${describeGap(daysLate)} after the trip ends — later than usual for ${
+              CATEGORY_NOUN[data.category]
+            }. Check it belongs to this trip.`,
+          );
+        }
       }
     }
   }

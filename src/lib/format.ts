@@ -50,28 +50,6 @@ export function toISODate(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Accepts loose user input ("3/4/2026", "2026-03-04") and normalises to ISO. */
-export function normaliseDateInput(input: string): string | null {
-  const s = input.trim();
-  if (!s) return null;
-  if (parseISODate(s)) return s;
-  const slash = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(s);
-  if (slash) {
-    let [, a, b, c] = slash;
-    let year = Number(c);
-    if (year < 100) year += 2000;
-    // Ambiguous M/D vs D/M: assume M/D unless the first part cannot be a month.
-    let month = Number(a);
-    let day = Number(b);
-    if (month > 12 && day <= 12) {
-      [month, day] = [day, month];
-    }
-    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return parseISODate(iso) ? iso : null;
-  }
-  return null;
-}
-
 /** Parses money typed by a human: "$1,234.50", "1 234,50", "(12.00)". */
 export function parseAmountInput(input: string): number | null {
   let s = input.trim();

@@ -18,7 +18,8 @@ Android from one codebase. All data stays on the device.
 **Trips.** A trip carries the description and location that make the AI output
 specific rather than generic. "Three days on site with Nordwind GmbH to run the
 migration workshop" produces a very different business purpose than an empty
-description does.
+description does. Dates are picked from a native calendar, and describe the days
+on the ground — not the window in which money was spent.
 
 **Scanning.** Take a photo or pick from the library. The receipt is saved to app
 storage *before* anything else happens, then queued for extraction. Claude reads
@@ -33,10 +34,20 @@ one expense and are read together as a single bill.
 
 **Review.** Every extraction is checked by code that cannot hallucinate:
 subtotal + tax + tip must equal the total, line items must sum to the subtotal,
-the currency must be a real ISO 4217 code, the date must be real, not in the
-future, and inside the trip window. Anything that fails is listed on the expense
-as a specific thing to check. Per-field and overall confidence scores from the
+the currency must be a real ISO 4217 code, and the date must be real and not in
+the future. Date-vs-trip checking is per-category, because a flight booked three
+months early is routine and a restaurant meal three months early is not — see
+below. Anything that fails is listed on the expense as a specific thing to
+check. Per-field and overall confidence scores from the
 model feed the same gate. Nothing is auto-filed unless you turn that on.
+
+**Expenses outside the travel dates.** Trips generate spend before and after
+the days on the ground: flights, hotels and conference registration booked
+months ahead; airport parking, the ride home and roaming charges landing after.
+Both the extraction prompt and the review gate expect this. Each category has
+its own tolerance — 365 days early for airfare and lodging, 45 days late for
+phone bills, but only 2 days either side for meals — so advance bookings pass
+silently while a genuinely odd date still gets flagged, with the reason named.
 
 **Reports.** PDF with a summary table (date, amount, purchase description,
 business purpose, category), a per-category breakdown, and optionally every
