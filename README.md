@@ -8,8 +8,8 @@ with the trip as context, so each expense comes back with not just the date and
 the amount but *what was bought* and *why it was a business expense on this
 particular trip*. Then you export a PDF with the receipts attached, one per page.
 
-Built with Expo (React Native) + TypeScript. iOS and Android from one codebase.
-All data stays on the device.
+Built with **Expo SDK 56** (React Native 0.85, React 19.2) + TypeScript. iOS and
+Android from one codebase. All data stays on the device.
 
 ---
 
@@ -141,6 +141,8 @@ scripts/check-logic.ts    device-free checks for validation + parsing
 - `metro.config.js` stubs `node:*` specifiers. The Anthropic SDK ships Node-only
   credential-discovery code that never runs in React Native but still has to
   resolve at bundle time.
+- File storage uses the SDK 54+ `File` / `Directory` / `Paths` API from
+  `expo-file-system`, not the deprecated `expo-file-system/legacy` shim.
 - Images sent for extraction are downscaled to a 2000px long edge (receipts are
   text-dense, so this keeps small print legible); PDF copies go to 1400px.
 - The database is versioned via `PRAGMA user_version` with an append-only

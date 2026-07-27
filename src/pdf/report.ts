@@ -1,5 +1,5 @@
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { toPdfBase64 } from '@/lib/images';
 import { escapeHtml, formatDate, formatDateRange, formatMoney, roundMoney } from '@/lib/format';
@@ -217,12 +217,14 @@ export async function generateReportPdf(
   const { html, included, excluded } = await buildReportHtml(trip, expenses, options);
   const { uri } = await Print.printToFileAsync({ html, base64: false });
 
+  // Print writes to a temp path with an opaque name; move it somewhere the
+  // share sheet will show a meaningful filename.
   const fileName = safeFileName(trip);
-  const target = `${FileSystem.cacheDirectory}${fileName}`;
-  await FileSystem.deleteAsync(target, { idempotent: true });
-  await FileSystem.moveAsync({ from: uri, to: target });
+  const target = new File(Paths.cache, fileName);
+  if (target.exists) target.delete();
+  await new File(uri).move(target);
 
-  return { uri: target, fileName, includedCount: included.length, excludedCount: excluded.length };
+  return { uri: target.uri, fileName, includedCount: included.length, excludedCount: excluded.length };
 }
 
 export async function shareFile(uri: string, mimeType: string, dialogTitle: string): Promise<void> {
@@ -282,7 +284,8 @@ export async function generateReportCsv(trip: Trip, expenses: ExpenseWithReceipt
   const csv = [header.join(','), ...rows].join('\n');
 
   const fileName = safeFileName(trip).replace(/\.pdf$/, '.csv');
-  const target = `${FileSystem.cacheDirectory}${fileName}`;
-  await FileSystem.writeAsStringAsync(target, csv, { encoding: FileSystem.EncodingType.UTF8 });
-  return { uri: target, fileName, includedCount: expenses.length, excludedCount: 0 };
+  const target = new File(Paths.cache, fileName);
+  target.create({ overwrite: true, intermediates: true });
+  target.write(csv);
+  return { uri: target.uri, fileName, includedCount: expenses.length, excludedCount: 0 };
 }

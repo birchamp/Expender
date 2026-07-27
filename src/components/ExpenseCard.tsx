@@ -83,7 +83,8 @@ const styles = StyleSheet.create({
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   thumbEmptyText: { color: colors.textFaint, fontSize: 10 },
   thumbOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    // RN 0.85 dropped `absoluteFillObject` from the public types.
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     borderRadius: radius.sm,
     alignItems: 'center',

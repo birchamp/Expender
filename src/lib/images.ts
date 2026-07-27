@@ -1,9 +1,10 @@
-import * as FileSystem from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Image } from 'react-native';
 import { newId } from './id';
 
-const RECEIPTS_DIR = `${FileSystem.documentDirectory}receipts/`;
+/** Receipt images live here permanently, outside the OS-reclaimable cache. */
+const receiptsDir = new Directory(Paths.document, 'receipts');
 
 /** Long-edge cap for the copy sent to the model. Receipts are text-dense, so
  *  we keep more resolution than a normal photo would need. */
@@ -17,10 +18,9 @@ export interface StoredImage {
   height: number | null;
 }
 
-async function ensureDir(): Promise<void> {
-  const info = await FileSystem.getInfoAsync(RECEIPTS_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(RECEIPTS_DIR, { intermediates: true });
+function ensureDir(): void {
+  if (!receiptsDir.exists) {
+    receiptsDir.create({ intermediates: true, idempotent: true });
   }
 }
 
@@ -40,11 +40,11 @@ export function getImageSize(uri: string): Promise<{ width: number; height: numb
  * makes receipt retention actually durable.
  */
 export async function persistCapturedImage(sourceUri: string): Promise<StoredImage> {
-  await ensureDir();
-  const target = `${RECEIPTS_DIR}${newId('r_')}.jpg`;
-  await FileSystem.copyAsync({ from: sourceUri, to: target });
-  const size = await getImageSize(target);
-  return { uri: target, width: size?.width ?? null, height: size?.height ?? null };
+  ensureDir();
+  const target = new File(receiptsDir, `${newId('r_')}.jpg`);
+  await new File(sourceUri).copy(target);
+  const size = await getImageSize(target.uri);
+  return { uri: target.uri, width: size?.width ?? null, height: size?.height ?? null };
 }
 
 export interface CropRect {
@@ -58,16 +58,16 @@ async function render(
   sourceUri: string,
   apply: (context: ReturnType<typeof ImageManipulator.manipulate>) => void,
 ): Promise<StoredImage> {
-  await ensureDir();
+  ensureDir();
   const context = ImageManipulator.manipulate(sourceUri);
   apply(context);
   const rendered = await context.renderAsync();
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.92 });
 
-  const target = `${RECEIPTS_DIR}${newId('r_')}.jpg`;
-  await FileSystem.moveAsync({ from: saved.uri, to: target });
-  const size = await getImageSize(target);
-  return { uri: target, width: size?.width ?? null, height: size?.height ?? null };
+  const target = new File(receiptsDir, `${newId('r_')}.jpg`);
+  await new File(saved.uri).move(target);
+  const size = await getImageSize(target.uri);
+  return { uri: target.uri, width: size?.width ?? null, height: size?.height ?? null };
 }
 
 /**
@@ -110,15 +110,11 @@ async function downscaleToBase64(uri: string, maxEdge: number, compress: number)
     compress,
     base64: true,
   });
-  if (saved.base64) {
-    // The manipulator writes a temp file even when base64 is requested.
-    await FileSystem.deleteAsync(saved.uri, { idempotent: true });
-    return saved.base64;
-  }
-  const data = await FileSystem.readAsStringAsync(saved.uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  await FileSystem.deleteAsync(saved.uri, { idempotent: true });
+
+  // The manipulator writes a temp file even when base64 is requested.
+  const temp = new File(saved.uri);
+  const data = saved.base64 ?? (await temp.base64());
+  if (temp.exists) temp.delete();
   return data;
 }
 
@@ -132,24 +128,23 @@ export function toPdfBase64(uri: string): Promise<string> {
   return downscaleToBase64(uri, PDF_MAX_EDGE, 0.7);
 }
 
-export async function deleteImage(uri: string): Promise<void> {
-  if (!uri.startsWith(RECEIPTS_DIR)) return;
-  await FileSystem.deleteAsync(uri, { idempotent: true });
+export function deleteImage(uri: string): void {
+  if (!uri.startsWith(receiptsDir.uri)) return;
+  const file = new File(uri);
+  if (file.exists) file.delete();
 }
 
 /**
  * Removes receipt files no row points at any more (crops supersede files, and
  * a deleted expense cascades its rows away). Safe to call at any time.
  */
-export async function pruneOrphanedImages(referenced: Set<string>): Promise<number> {
-  const info = await FileSystem.getInfoAsync(RECEIPTS_DIR);
-  if (!info.exists) return 0;
-  const names = await FileSystem.readDirectoryAsync(RECEIPTS_DIR);
+export function pruneOrphanedImages(referenced: Set<string>): number {
+  if (!receiptsDir.exists) return 0;
   let removed = 0;
-  for (const name of names) {
-    const uri = `${RECEIPTS_DIR}${name}`;
-    if (!referenced.has(uri)) {
-      await FileSystem.deleteAsync(uri, { idempotent: true });
+  for (const entry of receiptsDir.list()) {
+    if (entry instanceof Directory) continue;
+    if (!referenced.has(entry.uri)) {
+      entry.delete();
       removed++;
     }
   }
