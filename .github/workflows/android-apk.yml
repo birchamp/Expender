@@ -1,0 +1,78 @@
+name: Build Android APK
+
+# Produces an APK you can download and install straight onto a phone —
+# no computer, no Expo Go, no dev server on the same Wi-Fi.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/expo-build-setup-64tsau]
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify before building
+        run: npm run verify
+
+      # Generates android/ from app.json. The directory is gitignored, so it is
+      # rebuilt from config every run rather than drifting.
+      - name: Generate native project
+        run: npx expo prebuild --platform android --no-install
+
+      # Expo's template signs release builds with the debug keystore, which is
+      # exactly what sideloading needs: a self-contained, installable APK with
+      # the JS bundled in. Not a Play Store artifact.
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Name the APK
+        id: apk
+        run: |
+          src=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$src" || { echo "APK not found at $src"; find android -name '*.apk'; exit 1; }
+          mkdir -p out
+          cp "$src" "out/expender-${GITHUB_SHA::7}.apk"
+          echo "path=out/expender-${GITHUB_SHA::7}.apk" >> "$GITHUB_OUTPUT"
+          ls -lh out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: expender-apk
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+
+      # The artifact above downloads as a .zip, which is awkward on a phone.
+      # This release gives a direct .apk link Android can install on tap.
+      - name: Publish to the android-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: Expender — latest Android build
+          body: |
+            Install straight onto an Android phone: tap the `.apk` below,
+            allow installs from your browser when prompted, and open it.
+
+            Built from `${{ github.sha }}`.
+          files: ${{ steps.apk.outputs.path }}
+          prerelease: true
