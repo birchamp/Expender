@@ -88,6 +88,24 @@ simulator. Every native module the app uses is bundled in Expo Go, so no custom
 dev build is required — `npx expo run:ios` / `npx expo run:android` also work if
 you prefer one.
 
+### Your Expo Go has to be an SDK 56 build
+
+Expo Go only ever runs one SDK, and this project is on **SDK 56**. Check
+**Settings → App Info → Supported SDKs** in Expo Go; it needs to say `56`. The
+dev server advertises `runtimeVersion: exposdk:56.0.0`, and a newer Expo Go will
+refuse the project rather than run it badly.
+
+The App Store and Play Store now ship Expo Go for SDK 57, so an SDK 56 build is
+one you already have installed — let it auto-update and this project stops
+opening. When that happens, move the project forward instead of hunting for the
+old client:
+
+```bash
+npm install expo@^57 && npx expo install --fix
+```
+
+That is the whole upgrade; the app builds clean on SDK 57 with no code changes.
+
 `npx expo start --web` runs it in a browser. Useful for exercising the trip,
 review, report and PDF screens quickly; the camera and keychain fall back to a
 file picker and `localStorage` there, so treat web as a convenience, not the
