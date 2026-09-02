@@ -78,6 +78,27 @@ is ever lost and no number is ever silently wrong.
 
 ## Running it
 
+There are two ways in, and which one you want depends on whether you have a
+computer in the loop.
+
+### Just put it on an Android phone
+
+Download the APK from the
+[**android-latest**](https://github.com/birchamp/Expender/releases/tag/android-latest)
+release and tap it. Android will ask you to allow installs from your browser
+the first time; after that it is an ordinary installed app.
+
+This needs no computer, no Expo Go, and no dev server — the JS is bundled into
+the APK, so the SDK version of your Expo Go stops mattering entirely. GitHub
+Actions rebuilds it on every push (`.github/workflows/android-apk.yml`), and
+you can kick off a build by hand from the repo's **Actions** tab.
+
+It is signed with Expo's debug keystore, which is what makes it installable
+without a Play Store account. That is fine for putting the app on your own
+phone and is deliberately not a distributable build.
+
+### Develop against it
+
 ```bash
 npm install
 npx expo start
