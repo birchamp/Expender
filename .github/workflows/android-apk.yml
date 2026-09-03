@@ -67,10 +67,27 @@ jobs:
             exit 1
           fi
 
+          # A fixed filename keeps the download URL stable across builds, so a
+          # link handed to someone once keeps resolving to the current APK.
+          # The commit it came from is recorded in the release body instead.
           mkdir -p out
-          cp "$src" "out/expender-${GITHUB_SHA::7}-arm64.apk"
-          echo "path=out/expender-${GITHUB_SHA::7}-arm64.apk" >> "$GITHUB_OUTPUT"
+          cp "$src" out/expender-android-arm64.apk
+          echo "path=out/expender-android-arm64.apk" >> "$GITHUB_OUTPUT"
           ls -lh out/
+
+      # action-gh-release adds files without removing what is already attached,
+      # so without this the release accumulates one APK per build — including
+      # the stale 105MB universal one.
+      - name: Remove previously attached APKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/android-latest" \
+                  --jq '.assets[].id' 2>/dev/null || true)
+          for id in $ids; do
+            echo "Deleting stale asset $id"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" || true
+          done
 
       - uses: actions/upload-artifact@v4
         with:

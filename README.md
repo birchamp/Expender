@@ -83,10 +83,12 @@ computer in the loop.
 
 ### Just put it on an Android phone
 
-Download the APK from the
-[**android-latest**](https://github.com/birchamp/Expender/releases/tag/android-latest)
-release and tap it. Android will ask you to allow installs from your browser
-the first time; after that it is an ordinary installed app.
+[**Download the APK**](https://github.com/birchamp/Expender/releases/download/android-latest/expender-android-arm64.apk)
+and tap it. Android will ask you to allow installs from your browser the first
+time; after that it is an ordinary installed app.
+
+That link is permanent — every build replaces the file behind it, so it always
+resolves to the current APK.
 
 This needs no computer, no Expo Go, and no dev server — the JS is bundled into
 the APK, so the SDK version of your Expo Go stops mattering entirely. GitHub
