@@ -97,6 +97,16 @@ It is signed with Expo's debug keystore, which is what makes it installable
 without a Play Store account. That is fine for putting the app on your own
 phone and is deliberately not a distributable build.
 
+The APK is built for **arm64-v8a** only, which is every Android phone made
+since roughly 2017. A universal APK carries native code for four ABIs and runs
+about 105MB; dropping the three your phone will never execute takes it to
+around 40MB. The cost is that it will not install on a 32-bit device or an x86
+emulator — for those, build without the filter:
+
+```bash
+cd android && ./gradlew assembleRelease   # all four ABIs
+```
+
 ### Develop against it
 
 ```bash

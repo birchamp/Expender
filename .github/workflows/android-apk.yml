@@ -42,18 +42,34 @@ jobs:
       # Expo's template signs release builds with the debug keystore, which is
       # exactly what sideloading needs: a self-contained, installable APK with
       # the JS bundled in. Not a Play Store artifact.
+      # A universal APK carries native code for all four ABIs and lands around
+      # 105MB, of which a given phone uses a quarter. Every arm64 device since
+      # ~2017 is covered by arm64-v8a alone; the tradeoff is that this APK will
+      # not install on a 32-bit device or an x86 emulator.
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: Name the APK
         id: apk
         run: |
           src=android/app/build/outputs/apk/release/app-release.apk
           test -f "$src" || { echo "APK not found at $src"; find android -name '*.apk'; exit 1; }
+
+          echo "Native ABIs present:"
+          unzip -l "$src" | grep -oE 'lib/[^/]+/' | sort -u
+
+          # The ABI filter is the entire point of this build. If the property
+          # ever stops being honoured the build still succeeds, so fail loudly
+          # here rather than quietly shipping a 105MB universal APK again.
+          if unzip -l "$src" | grep -qE 'lib/(x86|x86_64|armeabi-v7a)/'; then
+            echo "::error::APK contains non-arm64 native libs — the reactNativeArchitectures filter did not apply."
+            exit 1
+          fi
+
           mkdir -p out
-          cp "$src" "out/expender-${GITHUB_SHA::7}.apk"
-          echo "path=out/expender-${GITHUB_SHA::7}.apk" >> "$GITHUB_OUTPUT"
+          cp "$src" "out/expender-${GITHUB_SHA::7}-arm64.apk"
+          echo "path=out/expender-${GITHUB_SHA::7}-arm64.apk" >> "$GITHUB_OUTPUT"
           ls -lh out/
 
       - uses: actions/upload-artifact@v4
@@ -72,6 +88,10 @@ jobs:
           body: |
             Install straight onto an Android phone: tap the `.apk` below,
             allow installs from your browser when prompted, and open it.
+
+            Built for **arm64-v8a**, which covers essentially every Android
+            phone made since 2017. It will not install on a 32-bit device or
+            an x86 emulator — build a universal APK for those.
 
             Built from `${{ github.sha }}`.
           files: ${{ steps.apk.outputs.path }}
