@@ -185,6 +185,8 @@ export default function ExpenseScreen() {
           await addReceipt(expense.id, image.uri, image.uri, image.width, image.height);
         }
         if (images.length) await load(false);
+      } catch (error) {
+        Alert.alert('Could not add the photo', error instanceof Error ? error.message : String(error));
       } finally {
         setBusy(false);
       }

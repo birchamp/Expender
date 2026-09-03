@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Linking } from 'react-native';
-import { persistCapturedImage, type StoredImage } from './images';
+import { fileStorageAvailable, FileStorageUnavailableError, persistCapturedImage, type StoredImage } from './images';
 
 async function ensurePermission(kind: 'camera' | 'library'): Promise<boolean> {
   const result =
@@ -27,6 +27,8 @@ async function ensurePermission(kind: 'camera' | 'library'): Promise<boolean> {
  * no-op and NOT create an empty expense.
  */
 export async function captureReceipts(source: 'camera' | 'library'): Promise<StoredImage[]> {
+  // Fail before opening a picker the browser cannot save the result of.
+  if (!fileStorageAvailable) throw new FileStorageUnavailableError();
   if (!(await ensurePermission(source === 'camera' ? 'camera' : 'library'))) return [];
 
   const result =

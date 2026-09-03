@@ -88,10 +88,12 @@ simulator. Every native module the app uses is bundled in Expo Go, so no custom
 dev build is required — `npx expo run:ios` / `npx expo run:android` also work if
 you prefer one.
 
-`npx expo start --web` runs it in a browser. Useful for exercising the trip,
-review, report and PDF screens quickly; the camera and keychain fall back to a
-file picker and `localStorage` there, so treat web as a convenience, not the
-real target.
+`npx expo start --web` runs it in a browser, but **receipt photos do not work
+there**: `expo-file-system`'s `File`/`Directory` API has no web implementation
+(the web build is a stub whose constructor only logs a warning), so anything
+that stores, crops or encodes an image fails. The browser is useful for the
+trip, expense-field and report screens; capture and scanning need a phone.
+Attempting to add a photo on web now says so instead of crashing.
 
 Then in **Settings**, paste an Anthropic API key
 ([console.anthropic.com](https://console.anthropic.com/settings/keys)). It is
@@ -118,6 +120,16 @@ npm run check     # deterministic validation + input parsing
 validation gate (arithmetic reconciliation, currency, date window, confidence
 thresholds, auto-confirm behaviour) and the money/date parsers. It needs no API
 key and no network.
+
+```bash
+npm run check:web
+```
+
+`scripts/check-web-boot.cjs` exports the web bundle, serves it, loads it in
+headless Chromium and fails on any uncaught error. Bundling only proves the
+imports resolve — this proves the app actually boots. It exists because a
+module-scope `new Directory(...)` shipped once and white-screened the web build
+while `expo export` reported success.
 
 The camera, crop gestures and a live extraction round-trip can only be tested on
 a device.
@@ -153,7 +165,10 @@ scripts/check-logic.ts    device-free checks for validation + parsing
   credential-discovery code that never runs in React Native but still has to
   resolve at bundle time.
 - File storage uses the SDK 54+ `File` / `Directory` / `Paths` API from
-  `expo-file-system`, not the deprecated `expo-file-system/legacy` shim.
+  `expo-file-system`, not the deprecated `expo-file-system/legacy` shim. The
+  receipts directory is resolved lazily, never at module scope: this module is
+  pulled in transitively by most screens, so a throwing constructor at import
+  time takes down the whole app rather than one feature.
 - Images sent for extraction are downscaled to a 2000px long edge (receipts are
   text-dense, so this keeps small print legible); PDF copies go to 1400px.
 - The database is versioned via `PRAGMA user_version` with an append-only

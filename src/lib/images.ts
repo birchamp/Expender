@@ -1,10 +1,37 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import { Image } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { newId } from './id';
 
-/** Receipt images live here permanently, outside the OS-reclaimable cache. */
-const receiptsDir = new Directory(Paths.document, 'receipts');
+/**
+ * expo-file-system's `File`/`Directory` classes have no web implementation —
+ * the web build is a stub whose constructor only logs a warning, so any
+ * operation on it fails. Receipt capture therefore cannot work in a browser.
+ */
+export class FileStorageUnavailableError extends Error {
+  constructor() {
+    super('Receipt photos need device storage, which the browser build does not have. Open the app in Expo Go on your phone.');
+    this.name = 'FileStorageUnavailableError';
+  }
+}
+
+export const fileStorageAvailable = Platform.OS !== 'web';
+
+/**
+ * Receipt images live here permanently, outside the OS-reclaimable cache.
+ *
+ * Resolved lazily and never at module scope: this module is imported by the
+ * extraction queue, which most screens pull in transitively, so a throwing
+ * constructor at import time white-screens the entire app instead of failing
+ * the one feature that needs storage.
+ */
+let cachedDir: Directory | null = null;
+
+function receiptsDir(): Directory {
+  if (!fileStorageAvailable) throw new FileStorageUnavailableError();
+  if (!cachedDir) cachedDir = new Directory(Paths.document, 'receipts');
+  return cachedDir;
+}
 
 /** Long-edge cap for the copy sent to the model. Receipts are text-dense, so
  *  we keep more resolution than a normal photo would need. */
@@ -18,10 +45,12 @@ export interface StoredImage {
   height: number | null;
 }
 
-function ensureDir(): void {
-  if (!receiptsDir.exists) {
-    receiptsDir.create({ intermediates: true, idempotent: true });
+function ensureDir(): Directory {
+  const dir = receiptsDir();
+  if (!dir.exists) {
+    dir.create({ intermediates: true, idempotent: true });
   }
+  return dir;
 }
 
 export function getImageSize(uri: string): Promise<{ width: number; height: number } | null> {
@@ -40,8 +69,8 @@ export function getImageSize(uri: string): Promise<{ width: number; height: numb
  * makes receipt retention actually durable.
  */
 export async function persistCapturedImage(sourceUri: string): Promise<StoredImage> {
-  ensureDir();
-  const target = new File(receiptsDir, `${newId('r_')}.jpg`);
+  const dir = ensureDir();
+  const target = new File(dir, `${newId('r_')}.jpg`);
   await new File(sourceUri).copy(target);
   const size = await getImageSize(target.uri);
   return { uri: target.uri, width: size?.width ?? null, height: size?.height ?? null };
@@ -58,13 +87,13 @@ async function render(
   sourceUri: string,
   apply: (context: ReturnType<typeof ImageManipulator.manipulate>) => void,
 ): Promise<StoredImage> {
-  ensureDir();
+  const dir = ensureDir();
   const context = ImageManipulator.manipulate(sourceUri);
   apply(context);
   const rendered = await context.renderAsync();
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.92 });
 
-  const target = new File(receiptsDir, `${newId('r_')}.jpg`);
+  const target = new File(dir, `${newId('r_')}.jpg`);
   await new File(saved.uri).move(target);
   const size = await getImageSize(target.uri);
   return { uri: target.uri, width: size?.width ?? null, height: size?.height ?? null };
@@ -92,6 +121,7 @@ export function rotateImage(sourceUri: string): Promise<StoredImage> {
 }
 
 async function downscaleToBase64(uri: string, maxEdge: number, compress: number): Promise<string> {
+  if (!fileStorageAvailable) throw new FileStorageUnavailableError();
   const size = await getImageSize(uri);
   const context = ImageManipulator.manipulate(uri);
   if (size) {
@@ -129,7 +159,8 @@ export function toPdfBase64(uri: string): Promise<string> {
 }
 
 export function deleteImage(uri: string): void {
-  if (!uri.startsWith(receiptsDir.uri)) return;
+  if (!fileStorageAvailable) return;
+  if (!uri.startsWith(receiptsDir().uri)) return;
   const file = new File(uri);
   if (file.exists) file.delete();
 }
@@ -139,9 +170,11 @@ export function deleteImage(uri: string): void {
  * a deleted expense cascades its rows away). Safe to call at any time.
  */
 export function pruneOrphanedImages(referenced: Set<string>): number {
-  if (!receiptsDir.exists) return 0;
+  if (!fileStorageAvailable) return 0;
+  const dir = receiptsDir();
+  if (!dir.exists) return 0;
   let removed = 0;
-  for (const entry of receiptsDir.list()) {
+  for (const entry of dir.list()) {
     if (entry instanceof Directory) continue;
     if (!referenced.has(entry.uri)) {
       entry.delete();

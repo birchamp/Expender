@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "check": "tsx scripts/check-logic.ts",
-    "verify": "tsc --noEmit && tsx scripts/check-logic.ts"
+    "verify": "tsc --noEmit && tsx scripts/check-logic.ts",
+    "check:web": "expo export --platform web --output-dir .expo-export-web && node scripts/check-web-boot.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
+    "playwright-core": "^1.49.0",
     "tsx": "^4.20.0",
     "typescript": "~5.8.3"
   }
